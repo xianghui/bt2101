@@ -90,7 +90,11 @@ server <- shinyServer(function(input, output) {
      sqErr = res * res
      
      #mean - square error (MSE)
-     paste("MSE:", "\n", mean(sqErr), sep="")
+     #unbiased - so divided by n-2 instead
+     mse = sum(sqErr) / (length(res) - 2)
+     
+     
+     paste("MSE(unbiased) :", "\n", mse, sep="")
    })
    
    #render the linear regression model summary
