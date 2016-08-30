@@ -14,7 +14,9 @@ ui <- shinyUI(navbarPage("BT2101 Demos",
                     sidebarPanel(
                       sliderInput("lrN", "Number of points", min = 5, max = 100, value = 50,
                                   step = 1),
-                      actionButton("lrGenerate", label = "Plot random points")
+                      actionButton("lrGenerate", label = "Plot random points"),
+                      h5("Description:"),
+                      p("This demo allows you to plot random points (red dots) and see the corresponding regression line. The residual errors are shown as grey lines.")
                     ),
                     #right main panel
                     mainPanel(
@@ -34,12 +36,13 @@ ui <- shinyUI(navbarPage("BT2101 Demos",
                     #left side bar
                     sidebarPanel(
                       textInput("lrsEqnInput", "Enter Equation (e.g. 2*x +3)", value="2*x+3"),
-                      actionButton("lrsGenerate", label = "Run Simulation")
+                      actionButton("lrsGenerate", label = "Run Simulation"),
+                      h5("Description:"),
+                      p("This demo allows you to run regression simulation. Specify an equation in R format(e.g. 2*x+3, x^3+x^2+1) and see how the regression lines (represented using cyan-colored lines) might look like using randomly generated data (after adding some artificial errors). The red line/curve is the actual relationship.")
                     ),
                     #right main panel
                     mainPanel(
-                      plotOutput("lrsPlot", height = "600px"),
-                      h6("Red line - actual relationship", align = "center")
+                      plotOutput("lrsPlot", height = "600px")
                     )
                   )
                )
