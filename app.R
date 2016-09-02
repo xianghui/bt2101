@@ -4,6 +4,7 @@
 
 
 library(shiny)
+library(DT)
 
 # Define UI for application that draws a histogram
 ui <- shinyUI(navbarPage("BT2101 Demos",
@@ -45,7 +46,34 @@ ui <- shinyUI(navbarPage("BT2101 Demos",
                       plotOutput("lrsPlot", height = "600px")
                     )
                   )
+               ),
+               
+               #for logistic regression
+               tabPanel("Logistic Regression (Default Dataset)",
+                  sidebarLayout(
+                    #left side bar
+                    sidebarPanel(
+                      selectInput("logrP", "Predictor(s):",
+                                  c("Balance" = "balance",
+                                    "Income1k" = "income1k",
+                                    "Student" = "student",
+                                    "Balance+Income1k" = "b+i")),
+                      actionButton("logrRun", label = "Classify"),
+                      h5("Description:"),
+                      p("This demo allows you to run logistic regression classification on the Default dataset. The 'default' points classified by the model is denoted with the 'x' symbol. Blue - non-default cases, Orange - default cases.")
+                    ),
+                    #right main panel
+                    mainPanel(
+                      plotOutput("logrPlot", height = "600px"),
+                      wellPanel(
+                        verbatimTextOutput("logrCode")
+                      ),
+                      #datatable
+                      DT::dataTableOutput('logrDT')
+                    )
+                  )
                )
+               
       )
 )
 
@@ -68,6 +96,7 @@ server <- shinyServer(function(input, output) {
     
     
     #formula column is just to pass the formula to the code block
+    #pass on the data to plot (in a list format)
     data <- list(data = data.frame(x = xVals, y = yVals), 
                  formula = formula, 
                  mod = mod1)
@@ -76,13 +105,13 @@ server <- shinyServer(function(input, output) {
   
   #render the linear regression plot
   output$lrPlot <- renderPlot({
+    #read the regression details for displaying
     dataVals = lrData()$data
     mod1 = lrData()$mod
     formula = lrData()$formula
     plot(dataVals$x, dataVals$y, col="red", pch=16, xlab="x", ylab="y")
     
-    
-    
+    #regression line
     abline(mod1, col="blue", lwd = 2)
     
     #predict values for the Xs
@@ -129,12 +158,9 @@ server <- shinyServer(function(input, output) {
     input$lrsEqnInput
   })
   
-  output$lrsEqn <- renderText({
-    paste("Actual Equation :", lrsData(), "red line")
-  })
-  
   #render the linear regression plot
   output$lrsPlot <- renderPlot({
+    #read the equation
     eqn <- lrsData()
     
     #generate 100 random values (x-coordinates)
@@ -154,14 +180,15 @@ server <- shinyServer(function(input, output) {
     y_perfect <- lapply(x, y_resp_perfect)
     y_perfect <- c(do.call("cbind", y_perfect))
     
-    #run 10 more simulations
+    #create a plot
     plot(x,y1, type="n", xlab="X", ylab="Y")
     
-    #plot the formula
+    #plot the formula (real relationship)
     eqn2 = function(x){eval(parse(text=eqn))}
     curve(eqn2, col="red", lwd=2, add = T)    
     
-    
+    #run simulation 10 times (embed the regression lines onto the plot)
+    #1 simulation result in one cyan line
     for (i in 1:10){
       y <- lapply(x, y_resp)
       y <- c(do.call("cbind", y))
@@ -172,6 +199,157 @@ server <- shinyServer(function(input, output) {
   
   #-------end linear regression simulation-------
   
+
+  #for logistic regression simulation
+  Default <- read.csv("data/default.csv")
+  #subset of 3000 records
+  #Default <- Default[sample(1:nrow(Default), 3000, replace=F),]
+  
+  #prepare the data (convert the fields from character to factor type)
+  Default$default = as.factor(Default$default)
+  Default$student = as.factor(Default$student)
+  
+  #create income1k column
+  Default[,"income1k"] <- Default[,"income"] / 1000
+  Default$income <- NULL
+  
+  default_len = nrow(Default)
+  logrClassification_res = rep(0, default_len)
+
+  
+  #delayed reaction
+  logrData <- eventReactive(input$logrRun,{
+    #variable to store the number of correct and wrong counts
+    correct = 0
+    wrong = 0
+    
+    #read in the predictor type
+    predictor = input$logrP
+    
+    #generate the model accordingly
+    if (predictor == "balance"){
+      defaultModel <- glm(default~balance, data=Default, family=binomial)
+
+      logrClassification_res = predict(defaultModel,data.frame(balance=Default$balance),type="resp")
+    }else if (predictor == "income1k"){
+      defaultModel <- glm(default~income1k, data=Default, family=binomial)
+      
+      logrClassification_res = predict(defaultModel,data.frame(income1k=Default$income1k),type="resp")
+    }else if (predictor == "student"){
+      defaultModel <- glm(default~student, data=Default, family=binomial)
+      
+      logrClassification_res = predict(defaultModel,data.frame(student=Default$student),type="resp")
+    }else if (predictor == "b+i"){
+      defaultModel <- glm(default~balance+income1k, data=Default, family=binomial)
+      
+      logrClassification_res = predict(defaultModel,data.frame(balance=Default$balance, income1k=Default$income1k),type="resp")
+    }
+    
+    #check the classification result and update the correct and wrong counts
+    #each row must be classified to be either default or non-default
+    #classify based on which value is larger - if P(default) >= 0.5 -> default, else non-default
+    for (i in 1:default_len){
+      if (logrClassification_res[i] < 0.5){
+        logrClassification_res[i] = 1
+        
+        if (as.numeric(Default$default[i]) == 1){
+          correct = correct + 1
+        }else{
+          wrong = wrong + 1
+        }
+      }else{
+        logrClassification_res[i] = 2
+        
+        if (as.numeric(Default$default[i]) == 1){
+          correct = correct + 1
+        }else{
+          wrong = wrong + 1
+        }
+      }
+    }
+
+    #generate the accuracy
+    accuracy = correct / (correct + wrong)
+    
+    #create the data to be passed on to other renderXXX functions
+    data <- list(predictor = predictor, 
+                 accuracy = accuracy, 
+                 mod = defaultModel,
+                 classification = logrClassification_res)
+  })
+  
+  #print out the accuracy and the model details
+  output$logrCode <- renderPrint({
+    result <- logrData()
+    
+    cat(paste("Accuracy:", result$accuracy))
+
+    summary(result$mod)
+  })
+  
+  #render plot
+  output$logrPlot <- renderPlot({
+    #read in the classification details
+    result <- logrData()
+    predictor <- result$predictor
+    model <- result$mod
+    classification_res <- result$classification
+
+    #plot the actual points colored by default type
+    #draw the curve of the model
+    #add in the classification results (x denotes default case)
+    #pch: NA_integer_ -> empty plot symbol
+    #     120    -> 'x' symbol
+    
+    if (predictor == "balance"){
+      plot(x=Default$balance, y=as.numeric(Default$default)-1, col=c('blue','orange')[as.numeric(Default$default)], xlab="Balance", ylab="Probability of Default", xlim=c(0, 3000))
+      
+      curve(predict(model,data.frame(balance=x),type="resp"),add=TRUE)
+      
+      
+      points(Default$balance,fitted(model), pch=c(NA_integer_,120)[classification_res], cex= 1.5)
+    }else if (predictor == "income1k"){
+      plot(x=Default$income1k, y=as.numeric(Default$default)-1, col=c('blue','orange')[as.numeric(Default$default)], xlab="Income1k", ylab="Probability of Default")
+      
+      curve(predict(model,data.frame(income1k=x),type="resp"),add=TRUE)
+      
+      points(Default$income1k,fitted(model), pch=c(NA_integer_,120)[classification_res], cex= 1.5)
+    }else if (predictor == "student"){
+      #draw with jitter (i.e. introduce a small "error" so that the points can be drawn without overlapping each other until it is only a single point)
+      plot(x=jitter(as.numeric(Default$student),factor=0.2), y=as.numeric(Default$default)-1, col=c('blue','orange')[as.numeric(Default$default)], xlab="Student (1 - not a student, 2 - student)", ylab="Probability of Default")
+      
+    }else if (predictor == "b+i"){
+      plot(x=Default$balance, y=Default$income1k, col=c('blue','orange')[as.numeric(Default$default)], pch=19, xlab="Balance", ylab="Income (1000)", xlim=c(0, 3000))
+      
+      points(Default$balance,Default$income1k, pch=c(NA_integer_,120)[classification_res], cex= 1.5)
+    }
+  })
+  
+  #data table 
+  output$logrDT <- DT::renderDataTable({
+    result <- logrData()
+    classification_res <- result$classification
+    
+    #convert 2 to Yes and 1 to No
+    classification_res[classification_res == 2] = 'Yes'
+    classification_res[classification_res == 1] = 'No'
+
+    #render the DT datatable
+    #%>% is an infix function - piping function (see magrittr library)
+    DT::datatable(cbind(Default, classification=classification_res), options = list(pageLength = 10)) %>%
+      
+      #color default column as bold with blue denoting No and orange denoting Yes
+      formatStyle('default', color = styleEqual(c("No", "Yes"), c('blue', 'orange')), fontWeight = 'bold') %>%
+      
+      #show the column as a bar
+      formatStyle('balance', background = styleColorBar(Default$balance, 'steelblue')) %>%
+      formatStyle('income1k', background = styleColorBar(Default$income1k, 'steelblue')) %>%
+      
+      #color classification column as bold with blue denoting No and orange denoting Yes
+      formatStyle('classification', color = styleEqual(c("No", "Yes"), c('blue', 'orange')), fontWeight = 'bold')
+  })
+  
+  #-------end linear regression simulation-------
   
   
   #TODO: more algos
