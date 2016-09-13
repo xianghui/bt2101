@@ -5,6 +5,13 @@
 
 library(shiny)
 library(DT)
+library(twitteR)
+library(ROAuth)
+library(tm)
+library(wordcloud)
+library(RColorBrewer)
+library(stringr)
+
 
 # Define UI for application that draws a histogram
 ui <- shinyUI(navbarPage("BT2101 Demos",
@@ -72,6 +79,29 @@ ui <- shinyUI(navbarPage("BT2101 Demos",
                       DT::dataTableOutput('logrDT')
                     )
                   )
+               ),
+               
+               #for web mining
+               tabPanel("Web Mining (Twitter)",
+                        sidebarLayout(
+                          #left side bar
+                          sidebarPanel(
+                            textInput("wmConsumerKey", "Enter Consumer Key (API Key)"),
+                            textInput("wmConsumerSecret", "Enter Consumer Secret (API Secret)"),
+                            textInput("wmAccessToken", "Enter Access Token"),
+                            textInput("wmAccessSecret", "Enter Access Secret"),
+                            textInput("wmSearch", "Enter search string"),
+                            actionButton("wmRun", label = "Search"),
+                            h5("Description:"),
+                            p("This demo demonstrates how you can access the Twitter API from the R environment. You need to create a Twitter app and object the 4 keys from your Twitter app. https://apps.twitter.com/")
+                          ),
+                          #right main panel
+                          mainPanel(
+                            plotOutput("wmPlot", height = "600px"),
+                            #datatable
+                            DT::dataTableOutput('wmDT')
+                          )
+                        )
                )
                
       )
@@ -200,7 +230,7 @@ server <- shinyServer(function(input, output) {
   #-------end linear regression simulation-------
   
 
-  #for logistic regression simulation
+  #for logistic regression
   Default <- read.csv("data/default.csv")
   #subset of 3000 records
   #Default <- Default[sample(1:nrow(Default), 3000, replace=F),]
@@ -349,8 +379,64 @@ server <- shinyServer(function(input, output) {
       formatStyle('classification', color = styleEqual(c("No", "Yes"), c('blue', 'orange')), fontWeight = 'bold')
   })
   
-  #-------end linear regression simulation-------
+  #-------end logistic regression-------
   
+  
+  #for web mining
+  
+  #delayed reaction
+  wmData <- eventReactive(input$wmRun,{
+    #read in the predictor type
+    consumerKey = input$wmConsumerKey
+    consumerSecret = input$wmConsumerSecret
+    accessToken = input$wmAccessToken
+    accessSecret = input$wmAccessSecret
+    searchString = input$wmSearch
+    
+    #execute this before calling any API-related calls
+    setup_twitter_oauth(consumerKey, consumerSecret, accessToken, accessSecret)
+    
+    #get 100 tweets with the search term
+    data.list <- searchTwitter(searchString, n=100)
+    
+    #convert it into dataframe
+    data.df <- twListToDF(data.list)
+    
+    
+    #create the data to be passed on to other renderXXX functions
+    data.df
+  })
+  
+  #render plot
+  output$wmPlot <- renderPlot({
+    #read in the classification details
+    data <- wmData()
+    
+    #remove any illegal symbols
+    usableText=str_replace_all(data$text,"[^[:graph:]]", " ") 
+    corpus <- Corpus(VectorSource(usableText))
+    
+    tdm <- TermDocumentMatrix(corpus, control = list(removePunctuation = TRUE, stopwords = stopwords("english"), removeNumbers = TRUE, tolower = TRUE))
+    
+    m = as.matrix(tdm)
+    
+    # get word counts in decreasing order
+    word_freqs = sort(rowSums(m), decreasing=TRUE)
+    dm = data.frame(word=names(word_freqs), freq=word_freqs)
+    
+    wordcloud(dm$word, dm$freq, random.order=FALSE, colors=brewer.pal(8, "Dark2"), scale=c(8,.2),min.freq=3)
+  })
+  
+  #data table 
+  output$wmDT <- DT::renderDataTable({
+    data <- wmData()
+    
+    #render the DT datatable
+    #%>% is an infix function - piping function (see magrittr library)
+    DT::datatable(data, options = list(pageLength = 10))
+  })
+  
+  #-------end web mining-------
   
   #TODO: more algos
 })
