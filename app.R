@@ -1,6 +1,8 @@
 #
 # Series of BT2101 demos
 #
+# @author: Lek Hsiang Hui <lekhsian @ comp.nus.edu.sg>
+#
 
 
 library(shiny)
