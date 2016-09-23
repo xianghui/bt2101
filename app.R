@@ -12,6 +12,9 @@ library(wordcloud)
 library(RColorBrewer)
 library(stringr)
 
+#for svm
+library(e1071)
+
 
 # Define UI for application that draws a histogram
 ui <- shinyUI(navbarPage("BT2101 Demos",
@@ -83,27 +86,47 @@ ui <- shinyUI(navbarPage("BT2101 Demos",
                
                #for web mining
                tabPanel("Web Mining (Twitter)",
-                        sidebarLayout(
-                          #left side bar
-                          sidebarPanel(
-                            textInput("wmConsumerKey", "Enter Consumer Key (API Key)"),
-                            textInput("wmConsumerSecret", "Enter Consumer Secret (API Secret)"),
-                            textInput("wmAccessToken", "Enter Access Token"),
-                            textInput("wmAccessSecret", "Enter Access Secret"),
-                            textInput("wmSearch", "Enter search string"),
-                            actionButton("wmRun", label = "Search"),
-                            h5("Description:"),
-                            p("This demo demonstrates how you can access the Twitter API from the R environment. You need to create a Twitter app and object the 4 keys from your Twitter app. https://apps.twitter.com/")
-                          ),
-                          #right main panel
-                          mainPanel(
-                            plotOutput("wmPlot", height = "600px"),
-                            #datatable
-                            DT::dataTableOutput('wmDT')
-                          )
-                        )
-               )
+                    sidebarLayout(
+                      #left side bar
+                      sidebarPanel(
+                        textInput("wmConsumerKey", "Enter Consumer Key (API Key)"),
+                        textInput("wmConsumerSecret", "Enter Consumer Secret (API Secret)"),
+                        textInput("wmAccessToken", "Enter Access Token"),
+                        textInput("wmAccessSecret", "Enter Access Secret"),
+                        textInput("wmSearch", "Enter search string"),
+                        actionButton("wmRun", label = "Search"),
+                        h5("Description:"),
+                        p("This demo demonstrates how you can access the Twitter API from the R environment. You need to create a Twitter app and object the 4 keys from your Twitter app. https://apps.twitter.com/")
+                      ),
+                      #right main panel
+                      mainPanel(
+                        plotOutput("wmPlot", height = "600px"),
+                        #datatable
+                        DT::dataTableOutput('wmDT')
+                      )
+                    )
+               ),
                
+               #for SVM
+               tabPanel("SVM",
+                    sidebarLayout(
+                      #left side bar
+                      sidebarPanel(
+                        radioButtons("svmRadio", 
+                          label=h5("Class"),
+                          choices =  list("Class 1" = 1, "Class 2" = 2, "Class 3" = 3),
+                          selected = 1
+                        ),
+                        actionButton("svmClear", label = "Clear"),
+                        h5("Description:"),
+                        p("This demo demonstrates how SVM classify the prediction space. Choose the Class and add point by clicking on the plot. You have to first choose a point for each class for this demo to work properly.")
+                      ),
+                      #right main panel
+                      mainPanel(
+                        plotOutput("svmPlot", click = "svm_plot_click")
+                      )
+                    )
+               )
       )
 )
 
@@ -437,6 +460,50 @@ server <- shinyServer(function(input, output) {
   })
   
   #-------end web mining-------
+  
+  #for svm
+  #have to use reactive values for this variable as it changes dynamically
+  svmData <- reactiveValues()
+  svmData$df <- data.frame(x1 = numeric(0), x2 = numeric(0), class = numeric(0))
+
+  #update the data accordingly for new data
+  observeEvent(input$svm_plot_click, {
+    x1Pt <- input$svm_plot_click$x
+    x2Pt <- input$svm_plot_click$y
+    newdf <- data.frame(x1=x1Pt, x2=x2Pt, class=input$svmRadio)
+    svmData$df = rbind(svmData$df, newdf)
+  })
+  
+  #clear the data
+  observeEvent(input$svmClear, {
+    svmData$df <- data.frame(x1 = numeric(0), x2 = numeric(0), class = numeric(0))
+  })
+  
+  output$svmPlot <- renderPlot({
+    data <- svmData$df
+    
+    if (nrow(data) == 0){
+      #show empty plot for 
+      plot(1, type="n", xlim = c(-5,5), ylim = c(-5, 5), xlab="x1", ylab="x2")
+    }
+    else{
+      #only do the model generation when we have all 3 classes
+      #x %in% y check whether x is in y (similar to is.element)
+      if ((1 %in% data$class) && (2 %in% data$class) && (3 %in% data$class)){
+        data$class <- factor(data$class)
+        model <- svm(class ~ ., data = data)
+        
+        #plot the svm model object
+        plot(model, data = data)
+      }
+      else{
+        #plot the points normally
+        plot(x = data$x1, y = data$x2, xlim = c(-5,5), ylim = c(-5, 5) , pch=c(15,17,19)[data$class], xlab="x1", ylab="x2")
+      }
+    }
+  })
+  #-------end svm-------
+  
   
   #TODO: more algos
 })
