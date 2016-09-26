@@ -114,11 +114,36 @@ ui <- shinyUI(navbarPage("BT2101 Demos",
                     sidebarLayout(
                       #left side bar
                       sidebarPanel(
-                        radioButtons("svmRadio", 
-                          label=h5("Class"),
-                          choices =  list("Class 1" = 1, "Class 2" = 2, "Class 3" = 3),
-                          selected = 1
+                        selectInput("svmClass", "Num of Class:",
+                                    c("2-class" = "2",
+                                      "3-class" = "3"),
+                                    selected = "2"),
+                        
+                        #depending on the svmClass selection, show the respective panel:
+                        conditionalPanel(
+                          condition = "input.svmClass == '2'",
+                          radioButtons("svmRadio2", 
+                                       label=h5("Class"),
+                                       choices =  list("Class 1" = 1, "Class 2" = 2),
+                                       selected = 1
+                          )
                         ),
+                        
+                        conditionalPanel(
+                          condition = "input.svmClass == '3'",
+                          radioButtons("svmRadio3", 
+                                       label=h5("Class"),
+                                       choices =  list("Class 1" = 1, "Class 2" = 2, "Class 3" = 3),
+                                       selected = 1
+                          )
+                        ),
+                        #--------------------------------------------
+                        
+                        selectInput("svmType", "Kernel Type:",
+                                    c("linear" = "linear",
+                                      "polynomial" = "polynomial",
+                                      "radial" = "radial"),
+                                    selected = "radial"),
                         actionButton("svmClear", label = "Clear"),
                         h5("Description:"),
                         p("This demo demonstrates how SVM classify the prediction space. Choose the Class and add point by clicking on the plot. You have to first choose a point for each class for this demo to work properly.")
@@ -470,9 +495,18 @@ server <- shinyServer(function(input, output) {
 
   #update the data accordingly for new data
   observeEvent(input$svm_plot_click, {
+    numClass <- input$svmClass
     x1Pt <- input$svm_plot_click$x
     x2Pt <- input$svm_plot_click$y
-    newdf <- data.frame(x1=x1Pt, x2=x2Pt, class=input$svmRadio)
+    
+    if (numClass == '2'){
+      thisClass <- input$svmRadio2
+    }
+    else{
+      thisClass <- input$svmRadio3
+    }
+    
+    newdf <- data.frame(x1=x1Pt, x2=x2Pt, class=thisClass)
     svmData$df = rbind(svmData$df, newdf)
   })
   
@@ -481,19 +515,35 @@ server <- shinyServer(function(input, output) {
     svmData$df <- data.frame(x1 = numeric(0), x2 = numeric(0), class = numeric(0))
   })
   
+  #clear the data (when change number of classes)
+  observeEvent(input$svmClass, {
+    svmData$df <- data.frame(x1 = numeric(0), x2 = numeric(0), class = numeric(0))
+  })
+  
   output$svmPlot <- renderPlot({
     data <- svmData$df
+    type <-input$svmType
+    numClass <- input$svmClass
     
     if (nrow(data) == 0){
       #show empty plot for 
       plot(1, type="n", xlim = c(-5,5), ylim = c(-5, 5), xlab="x1", ylab="x2")
     }
     else{
+      check = FALSE
+      if (numClass == '2'){
+        check = (1 %in% data$class) && (2 %in% data$class)
+      }
+      else{
+        check = (1 %in% data$class) && (2 %in% data$class) && (3 %in% data$class)
+      }
+      
+      
       #only do the model generation when we have all 3 classes
       #x %in% y check whether x is in y (similar to is.element)
-      if ((1 %in% data$class) && (2 %in% data$class) && (3 %in% data$class)){
+      if (check){
         data$class <- factor(data$class)
-        model <- svm(class ~ ., data = data)
+        model <- svm(class ~ ., data = data, kernel = type)
         
         #plot the svm model object
         plot(model, data = data)
