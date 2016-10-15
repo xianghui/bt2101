@@ -17,6 +17,9 @@ library(stringr)
 #for svm
 library(e1071)
 
+#for decision tree
+library(rpart)
+library(rpart.plot)
 
 # Define UI for application that draws a histogram
 ui <- shinyUI(navbarPage("BT2101 Demos",
@@ -151,6 +154,26 @@ ui <- shinyUI(navbarPage("BT2101 Demos",
                       #right main panel
                       mainPanel(
                         plotOutput("svmPlot", click = "svm_plot_click")
+                      )
+                    )
+               ),
+               
+               #for decision tree
+               tabPanel("Decision Tree",
+                    sidebarLayout(
+                      #left side bar
+                      sidebarPanel(
+                        textInput("dtSourceURL", "Source URL (CSV)", value = "https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data"),
+                        textInput("dtColnames", "Column names", value = "c(\"sex\", \"len\", \"diameter\", \"height\", \"whole_weight\", \"shucked_weight\", \"viscera_weight\", \"shell_weight\", \"rings\")"),
+                        actionButton("dtRun", label = "Classify"),
+                        h5("Description:"),
+                        p("This demo demonstrates how a decision tree is generated from a dataset. You need to the url to the data set (CSV format) and the colnames (in R string vector format)")
+                      ),
+                      #right main panel
+                      mainPanel(
+                        plotOutput("dtPlot", height = "600px"),
+                        #datatable
+                        DT::dataTableOutput('dtDT')
                       )
                     )
                )
@@ -556,6 +579,43 @@ server <- shinyServer(function(input, output) {
   })
   #-------end svm-------
   
+  
+  #for decision tree
+  
+  #delayed reaction
+  decisionTreeData <- eventReactive(input$dtRun,{
+    #read in the predictor type
+    sourceURL = input$dtSourceURL
+    colnames = input$dtColnames
+    
+    data <- read.csv(sourceURL, header = F)
+    colnames(data) <- eval(parse(text=colnames))
+    
+    data
+  })
+  
+  #render plot
+  output$dtPlot <- renderPlot({
+    #read in the classification details
+    data <- decisionTreeData()
+    
+    colnames(data)[ncol(data)] <- "y"
+    
+    #create the decision tree model
+    model <- rpart(y~., data)
+    
+    #plot the decision tree
+    rpart.plot(model)
+  })
+  
+  #data table 
+  output$dtDT <- DT::renderDataTable({
+    data <- decisionTreeData()
+    
+    DT::datatable(data, options = list(pageLength = 10))
+  })
+  
+  #-------end decision tree-------
   
   #TODO: more algos
 })
