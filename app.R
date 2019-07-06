@@ -538,8 +538,8 @@ server <- shinyServer(function(input, output) {
   #update the data accordingly for new data
   observeEvent(input$svm_plot_click, {
     numClass <- input$svmClass
-    x1Pt <- input$svm_plot_click$x
-    x2Pt <- input$svm_plot_click$y
+    x1Pt <- input$svm_plot_click$y
+    x2Pt <- input$svm_plot_click$x
     
     if (numClass == '2'){
       thisClass <- input$svmRadio2
@@ -569,7 +569,7 @@ server <- shinyServer(function(input, output) {
     
     if (nrow(data) == 0){
       #show empty plot for 
-      plot(1, type="n", xlim = c(-5,5), ylim = c(-5, 5), xlab="x1", ylab="x2")
+      plot(1, type="n", xlim = c(-5,5), ylim = c(-5, 5), xlab="x2", ylab="x1")
     }
     else{
       check = FALSE
@@ -585,6 +585,7 @@ server <- shinyServer(function(input, output) {
       #x %in% y check whether x is in y (similar to is.element)
       if (check){
         data$class <- factor(data$class)
+        print(data)
         model <- svm(class ~ ., data = data, kernel = type)
         
         #plot the svm model object
@@ -592,7 +593,7 @@ server <- shinyServer(function(input, output) {
       }
       else{
         #plot the points normally
-        plot(x = data$x1, y = data$x2, xlim = c(-5,5), ylim = c(-5, 5) , pch=c(15,17,19)[data$class], xlab="x1", ylab="x2")
+        plot(x=data$x2, y = data$x1, xlim = c(-5,5), ylim = c(-5, 5) , pch=c(15,17,19)[data$class], xlab="x2", ylab="x1")
       }
     }
   })
